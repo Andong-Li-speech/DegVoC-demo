@@ -28,6 +28,7 @@ const datasetConfigs = [
 
 function initDataset(config) {
     const container = document.getElementById(config.id);
+    if (!container) return;
     for (let sampleIdx = 1; sampleIdx <= config.samples; sampleIdx++) {
         const caseSection = document.createElement('div');
         caseSection.className = 'subsection';
@@ -73,12 +74,14 @@ function createAudioTable(config, sampleIndex, basePath) {
             const modelIndex = row + col;
             if (modelIndex < totalModels) {
                 const model = config.models[modelIndex];
+                const audioSrc = `${basePath}/${model}/sample${sampleIndex}.wav`;
                 dataRow.innerHTML += `
                     <td class="tg-cell">
                         <div class="media-container">
-                            <audio controls class="lazy-audio" data-src="${basePath}/${model}/sample${sampleIndex}.wav">
-                                <p>Audio will load when visible</p>
-                            </audio>
+                            <audio controls class="lazy-audio" data-src="${audioSrc}">
+                                Your browser does not support the audio element.
+                             </audio>
+                            <a href="${audioSrc}" download class="audio-download">Download</a>
                         </div>
                     </td>
                 `;
@@ -95,60 +98,69 @@ function createAudioTable(config, sampleIndex, basePath) {
 
 
 document.addEventListener('DOMContentLoaded', function() {
-    datasetConfigs.forEach(config => initDataset(config));
-    initLazyLoading(); 
+    try {
+        datasetConfigs.forEach(config => initDataset(config));
+        initLazyLoading(); 
 
-    document.addEventListener('play', function(e) {
-        if (e.target.tagName === 'AUDIO') {
-            document.querySelectorAll('audio').forEach(audio => {
-                if (audio !== e.target) {
-                    audio.pause();
-                    audio.currentTime = 0;
-                }
-            });
-        }
-    }, true);
+        document.addEventListener('play', function(e) {
+            if (e.target.tagName === 'AUDIO') {
+                document.querySelectorAll('audio').forEach(audio => {
+                    if (audio !== e.target) {
+                        audio.pause();
+                        audio.currentTime = 0;
+                    }
+                });
+            }
+        }, true);
+    } catch (error) {
+        console.error('Initialization error:', error);
+    }
 });
 
 
 function initLazyLoading() {
-    const audioObserver = new IntersectionObserver((entries, observer) => {
-        entries.forEach(entry => {
-            if (entry.isIntersecting) {
-                const audio = entry.target;
-                if (audio.dataset.src && !audio.querySelector('source')) {
-                    const source = document.createElement('source');
-                    source.src = audio.dataset.src;
-                    source.type = 'audio/wav';
-                    audio.appendChild(source);
-                    audio.load();
-                    audio.classList.remove('lazy-audio');
-                    observer.unobserve(audio);
-                }
-            }
-        });
-    }, { rootMargin: '200px 0px' });
-
-    document.querySelectorAll('.lazy-audio').forEach(audio => {
-        audioObserver.observe(audio);
-    });
-
-    let lazyLoadThrottleTimeout;
-    window.addEventListener('scroll', function() {
-        if (lazyLoadThrottleTimeout) clearTimeout(lazyLoadThrottleTimeout);
-        lazyLoadThrottleTimeout = setTimeout(() => {
-            document.querySelectorAll('.lazy-audio:not(:has(source))').forEach(audio => {
-                const rect = audio.getBoundingClientRect();
-                if (rect.top < window.innerHeight + 200) {
-                    const source = document.createElement('source');
-                    source.src = audio.dataset.src;
-                    source.type = 'audio/wav';
-                    audio.appendChild(source);
-                    audio.classList.remove('lazy-audio');
+    try {
+        const audioObserver = new IntersectionObserver((entries, observer) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    const audio = entry.target;
+                    if (audio.dataset.src && !audio.querySelector('source')) {
+                        const source = document.createElement('source');
+                        source.src = audio.dataset.src;
+                        source.type = 'audio/wav';
+                        audio.appendChild(source);
+                        audio.load().catch(err => console.error('Audio load error:', err));
+                        audio.classList.remove('lazy-audio');
+                        observer.unobserve(audio);
+                    }
                 }
             });
-        }, 200);
-    });
+        }, { rootMargin: '200px 0px' });
+
+        document.querySelectorAll('.lazy-audio').forEach(audio => {
+            audioObserver.observe(audio);
+        });
+
+        let lazyLoadThrottleTimeout;
+        window.addEventListener('scroll', function() {
+            if (lazyLoadThrottleTimeout) clearTimeout(lazyLoadThrottleTimeout);
+            lazyLoadThrottleTimeout = setTimeout(() => {
+                document.querySelectorAll('.lazy-audio:not(:has(source))').forEach(audio => {
+                    const rect = audio.getBoundingClientRect();
+                    if (rect.top < window.innerHeight + 200) {
+                        const source = document.createElement('source');
+                        source.src = audio.dataset.src;
+                        source.type = 'audio/wav';
+                        audio.appendChild(source);
+                        audio.load().catch(err => console.error('Audio load error:', err));
+                        audio.classList.remove('lazy-audio');
+                    }
+                });
+            }, 200);
+        });
+    } catch (error) {
+        console.error('Lazy loading error:', error);
+    }
 }
 
 
@@ -160,6 +172,39 @@ style.textContent = `
     }
     .media-container {
         position: relative;
+        margin-bottom: 12px;
+    }
+    .audio-download {
+        display: inline-block;
+        margin-top: 6px;
+        color: #0066cc;
+        text-decoration: none;
+        font-size: 0.9em;
+    }
+    .audio-download:hover {
+        text-decoration: underline;
+    }
+    .table-wrapper {
+        margin-bottom: 20px;
+        overflow-x: auto;
+    }
+    table.tg {
+        border-collapse: collapse;
+        width: 100%;
+    }
+    .tg-header {
+        border: 1px solid #ccc;
+        padding: 8px;
+        text-align: center;
+        background-color: #f0f0f0;
+    }
+    .tg-cell {
+        border: 1px solid #ccc;
+        padding: 8px;
+        text-align: center;
+    }
+    .subsection {
+        margin-bottom: 30px;
     }
 `;
 document.head.appendChild(style);
